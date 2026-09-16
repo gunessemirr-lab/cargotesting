@@ -25,6 +25,7 @@ export default function AdminPage() {
   const [drafts, setDrafts] = useState<DraftShipment[]>([]);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
+  const [rawOcrText, setRawOcrText] = useState("");
   const [bulkText, setBulkText] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -68,6 +69,7 @@ export default function AdminPage() {
 
     setOcrLoading(true);
     setOcrProgress(0);
+    setRawOcrText("");
 
     try {
       const result = await Tesseract.recognize(file, 'tur', {
@@ -78,6 +80,7 @@ export default function AdminPage() {
         }
       });
       
+      setRawOcrText(result.data.text);
       parseAndAddDrafts(result.data.text);
     } catch (err) {
       console.error(err);
@@ -89,18 +92,27 @@ export default function AdminPage() {
   };
 
   const parseAndAddDrafts = (text: string) => {
+    console.log("--- RAW OCR TEXT ---");
+    console.log(text);
+    console.log("--------------------");
+
     const lines = text.split('\n');
     const newDrafts: DraftShipment[] = [];
 
-    // 12 haneli sayıları bulma Regex'i
-    const trackingRegex = /\b\d{12}\b/;
+    // Esnek 12 Haneli Regex: Başı ve sonu boşluk/satır başı ile sınırlı, 
+    // içinde sadece rakam ve O/o harfi olan, aralarında isteğe bağlı boşluklar olan tam 12 karakterlik blok.
+    const trackingRegex = /(?:^|\s)((?:[0-9Oo]\s*){12})(?=\s|$)/i;
 
     lines.forEach(line => {
       const match = line.match(trackingRegex);
       if (match) {
-        const trackingCode = match[0];
+        const rawCodeMatch = match[1]; // Sadece yakalanan kod kısmı (boşluklu veya O/o'lu olabilir)
+        
+        // Kodu temizle: Tüm boşlukları kaldır, O ve o harflerini 0 yap
+        const trackingCode = rawCodeMatch.replace(/\s+/g, '').replace(/[Oo]/g, '0');
+        
         // Kodu satırdan çıkarıp kalan kısmı isim olarak kabul ediyoruz (temizleme yaparak)
-        let namePart = line.replace(trackingCode, '').trim();
+        let namePart = line.replace(rawCodeMatch, '').trim();
         // İsimdeki fazla boşlukları ve gereksiz noktalama işaretlerini temizle
         namePart = namePart.replace(/[^\p{L}\s]/gu, '').replace(/\s+/g, ' ').trim();
         
@@ -111,6 +123,8 @@ export default function AdminPage() {
         });
       }
     });
+
+    console.log("--- PARSED DRAFTS ---", newDrafts);
 
     if (newDrafts.length > 0) {
       setDrafts(prev => [...prev, ...newDrafts]);
@@ -313,6 +327,19 @@ export default function AdminPage() {
             </button>
           </div>
         </div>
+
+        {/* Hata Ayıklama (Debug View) */}
+        {rawOcrText && (
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <h2 className="text-lg font-semibold mb-2 text-gray-900">Hata Ayıklama (Raw OCR Text)</h2>
+            <p className="text-sm text-gray-500 mb-4">OCR'ın kağıttan veya görselden direkt okuduğu ham metin aşağıdadır.</p>
+            <textarea
+              readOnly
+              value={rawOcrText}
+              className="w-full h-32 p-3 border border-gray-200 rounded-xl bg-gray-50 text-xs font-mono outline-none resize-y"
+            />
+          </div>
+        )}
 
         {/* Onay Tablosu */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
