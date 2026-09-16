@@ -198,35 +198,21 @@ export default function AdminPage() {
 
     setSaving(true);
     try {
-      const trackingCodes = validDrafts.map(d => d.tracking_code.trim());
-
-      // Mükerrer Kayıt (Duplicate) Kontrolü
-      const { data: existingData, error: fetchError } = await supabase
-        .from('shipments')
-        .select('tracking_code')
-        .in('tracking_code', trackingCodes);
-
-      if (fetchError) throw fetchError;
-
-      if (existingData && existingData.length > 0) {
-        const existingCodes = existingData.map(e => e.tracking_code);
-        alert(`Hata: Veritabanında zaten kayıtlı olan kodlar var! Lütfen listeden çıkarın:\n\n${existingCodes.join('\n')}`);
-        setSaving(false);
-        return;
-      }
-
-      const inserts = validDrafts.map(d => ({
+      const cargoData = validDrafts.map(d => ({
         tracking_code: d.tracking_code.trim(),
         recipient_name: d.recipient_name.trim(),
         carrier: "Yurtiçi Kargo", // varsayılan
         status: "active"
       }));
 
-      const { error } = await supabase.from('shipments').insert(inserts);
+      // Aynı kargo kodu varsa üzerine yaz (update) yoksa yeni ekle (insert)
+      const { error } = await supabase
+        .from('shipments')
+        .upsert(cargoData, { onConflict: 'tracking_code' });
 
       if (error) throw error;
 
-      alert(`${validDrafts.length} adet kargo başarıyla kaydedildi!`);
+      alert(`${validDrafts.length} adet kargo başarıyla kaydedildi/güncellendi!`);
       // Temizle
       setDrafts([]);
     } catch (err: any) {
