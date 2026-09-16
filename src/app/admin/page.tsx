@@ -135,8 +135,36 @@ export default function AdminPage() {
 
   const handleBulkTextProcess = () => {
     if (!bulkText.trim()) return;
-    parseAndAddDrafts(bulkText);
-    setBulkText("");
+    
+    // Sürekli Metin (Continuous Text) Ayrıştırma Mantığı
+    // \d*? => baştaki liste no vb. atlar
+    // (\d{12}) => tam 12 haneli kargo kodu (Grup 1)
+    // (?!\d) => kargo kodundan hemen sonra başka rakam olmamasını garantiler
+    // (.*?) => Sonraki kargo koduna kadar olan tüm karakterler (Grup 2 - İsim)
+    const regex = /\d*?(\d{12})(?!\d)(.*?)(?=\d*?\d{12}(?!\d)|$)/gs;
+    const newDrafts: DraftShipment[] = [];
+
+    let match;
+    while ((match = regex.exec(bulkText)) !== null) {
+      const trackingCode = match[1];
+      let customerName = match[2];
+
+      // İsim kısmındaki özel karakterleri ve satır atlamalarını temizle
+      customerName = customerName.replace(/[^\p{L}\s]/gu, '').replace(/\s+/g, ' ').trim();
+
+      newDrafts.push({
+        id: Math.random().toString(36).substring(7),
+        tracking_code: trackingCode,
+        recipient_name: customerName || "Bilinmiyor",
+      });
+    }
+
+    if (newDrafts.length > 0) {
+      setDrafts(prev => [...prev, ...newDrafts]);
+      setBulkText(""); // Textarea'yı temizle
+    } else {
+      alert("Yapıştırılan metinde uygun formatta (12 haneli) kargo kodu bulunamadı.");
+    }
   };
 
   const updateDraft = (id: string, field: keyof DraftShipment, value: string) => {
